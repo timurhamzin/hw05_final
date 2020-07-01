@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %} Запись автора {{ author.username }} от {{ post.pub_date }} {% endblock %}
+{% block header %} Запись автора {{ author.username }} от {{ post.pub_date }} {% endblock %}
+{% block content %}
+
+<div class="row">
+    <div class="col-md-3 mb-3 mt-1">
+        {% include 'includes/author.html' with author=author post_count=post_count %}
+    </div>
+    <div class="col-md-9">
+        {% include 'includes/post_card.html' with post=post %}
+    </div>
+</div>
+
+{% include 'comment.html' with post=post items=comments form=form %}
+
+{% endblock %}
