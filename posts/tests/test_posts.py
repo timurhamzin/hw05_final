@@ -11,7 +11,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.core.files.images import ImageFile, File
 
-from posts.models import Post, Group
+from posts.models import Post, Group, Follow
 from posts.forms import PostForm
 from yatube.settings import BASE_DIR, TEMPLATE_CACHE_TIMEOUTS
 from yatube.utils import print_form_errors
@@ -69,12 +69,12 @@ class TestPosts(TestCase):
         return res
 
     def test_logged_user_can_publish_post(self):
-        response = self.publish_post_new()
+        response = self.publish_post_with_new()
         self.assertEqual(200, response.status_code)
         self._post = self.check_post_in_posts()
         self.post_text_is_found_on_post_pages()
 
-    def publish_post_new(self):
+    def publish_post_with_new(self):
         url = reverse('post_new')
         response = self._logged_client.post(url, data=self.post_publish_data(),
                                             follow=True)
@@ -195,7 +195,7 @@ class TestPosts(TestCase):
         else:
             index_cache_timeout = TEMPLATE_CACHE_TIMEOUTS['index']
 
-        self.publish_post_new()
+        self.publish_post_with_new()
         self.post_text_is_found_on_post_pages()
         initial_post_text = self._post.text
         post_id = self._post.pk
@@ -224,3 +224,55 @@ class TestPosts(TestCase):
 
     def test_index_template_cache(self):
         self.check_logged_user_can_edit(index_cache_timeout=3)
+
+    def check_follow_author(self, author: User):
+        follow_url = reverse('profile_follow',
+                              kwargs={'username': author.username})
+        self._logged_client.get(follow_url)
+        following = Follow.objects.get(author=author, user=self._user)
+        self.assertIsNotNone(following)
+
+    def check_unfollow_author(self, author: User):
+        unfollow_url = reverse('profile_unfollow',
+                               kwargs={'username': author.username})
+        self._logged_client.get(unfollow_url)
+        try:
+            follow = Follow.objects.get(author=author, user=self._user)
+            self.assertIsNone(follow)
+        except Follow.DoesNotExist:
+            pass
+
+    def test_logged_user_can_follow(self):
+        author = User(username='test_author')
+        author.save()
+        self.check_follow_author(author)
+        self.check_unfollow_author(author)
+
+    def test_new_post_seen_by_follower_unseen_by_others(self):
+        author = User(username='test_author')
+        author.save()
+        self.check_follow_author(author)
+        post = Post(text='I`m followed', author=author)
+        post.save()
+
+        # follower can see
+        follow_index_url = reverse('follow_index')
+        follow_index_response = self._logged_client.get(follow_index_url)
+        self.assertContains(follow_index_response, post.text)
+
+        # not a follower cannot see
+        any_user = User(username='test_author')
+        any_user.save()
+
+
+        #
+        # def publish_post_with_new(self):
+        #     url = reverse('post_new')
+        #     response = self._logged_client.post(url,
+        #                                         data=self.post_publish_data(),
+        #                                         follow=True)
+        #     self._post = self.check_post_in_posts()
+        #     self.post_text_is_found_on_post_pages()
+        #     return response
+        #
+        # self.c

@@ -3,6 +3,9 @@
 {% block title %} Последние обновления {% endblock %}
 
 {% block content %}
+
+    {% include "includes/menu.html" with index=True %}
+
     <div class="container">
        <h1> Последние обновления на сайте</h1>
         <!-- Вывод ленты записей -->

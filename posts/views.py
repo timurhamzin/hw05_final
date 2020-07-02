@@ -1,13 +1,14 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse, reverse_lazy
-from django.http import HttpResponseNotFound
+from django.http import HttpResponseNotFound, HttpResponse, Http404
 from django.core.paginator import Paginator
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404, \
+    get_list_or_404
 from django.views.decorators.cache import cache_page
 
 from yatube.settings import TEMPLATE_CACHE_TIMEOUTS
-from .models import Post
+from .models import Post, Follow
 from .forms import PostForm, CommentForm
 User = get_user_model()
 
@@ -41,13 +42,18 @@ def group_posts(request, slug):
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
+    try:
+        following = Follow.objects.get(author=author.pk, user=request.user.pk)
+    except Follow.DoesNotExist:
+        following = None
     posts = author.posts.select_related('author', 'group').all()
     paginator = Paginator(posts, 10)
     page_number = request.GET.get('page', 1)
     page = paginator.get_page(page_number)
     return render(request, 'profile.html',
                   {'author': author, 'posts': posts,
-                   'page': page, 'paginator': paginator})
+                   'page': page, 'paginator': paginator,
+                   'following': following})
 
 
 def post_view(request, username: str, post_id: int):
@@ -136,4 +142,50 @@ def add_comment(request, username: str, post_id: int):
             comment.author = request.user
             comment.post = post
             comment.save()
+    return redirect(redirect_to)
+
+
+@login_required
+def follow_index(request):
+    following = get_list_or_404(Follow.objects.values('author'),
+                                user=request.user)
+    following_pks = map(lambda x: x['author'], following)
+    following_posts = Post.objects.select_related('author', 'group').filter(
+        author__pk__in=following_pks).all()
+    paginator = Paginator(following_posts, 10)
+    page_number = request.GET.get('page', 1)
+    page = paginator.get_page(page_number)
+    return render(
+        request, 'follow.html',
+        {
+            'page': page,
+            'paginator': paginator,
+            'cache_timeout': TEMPLATE_CACHE_TIMEOUTS['index'],
+            'follow': following
+        }
+    )
+
+
+@login_required
+def profile_follow(request, username):
+    try:
+        following = Follow.objects.filter(user=request.user).values('author')
+        following_pks = map(lambda x: x['author'], following)
+    except Follow.DoesNotExist:
+        following_pks = []
+    author = get_object_or_404(User, username=username)
+    if author.pk not in following_pks:
+        follow = Follow(user=request.user, author=author)
+        follow.save()
+    redirect_to = reverse('follow_index')
+    return redirect(redirect_to)
+
+
+@login_required
+def profile_unfollow(request, username):
+    author = get_object_or_404(User, username=username)
+    following = Follow.objects.get(author=author.pk, user=request.user.pk)
+    if following:
+        following.delete()
+    redirect_to = reverse('index')
     return redirect(redirect_to)
