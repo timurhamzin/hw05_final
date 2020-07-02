@@ -1,8 +1,8 @@
 import os
 from io import BytesIO
 from time import sleep
-
 from PIL import Image
+
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -12,9 +12,7 @@ from django.urls import reverse
 from django.core.files.images import ImageFile, File
 
 from posts.models import Post, Group, Follow
-from posts.forms import PostForm
 from yatube.settings import BASE_DIR, TEMPLATE_CACHE_TIMEOUTS
-from yatube.utils import print_form_errors
 
 
 class TestStringMethods(TestCase):
@@ -185,7 +183,7 @@ class TestPosts(TestCase):
         del data['text']  # just to make sure form.errors is not None
         response = self._logged_client.post(post_to, data=data, forward=True)
         form = response.context['form']
-        self.assertEquals(False, form.is_valid())
+        self.assertEqual(False, form.is_valid())
         self.assertIn('image', form.errors.keys())
 
     def check_logged_user_can_edit(self, index_cache_timeout=0):
@@ -257,22 +255,26 @@ class TestPosts(TestCase):
 
         # follower can see
         follow_index_url = reverse('follow_index')
-        follow_index_response = self._logged_client.get(follow_index_url)
-        self.assertContains(follow_index_response, post.text)
+        following_response = self._logged_client.get(follow_index_url,
+                                                     follow=False)
+        self.assertContains(following_response, post.text)
 
         # not a follower cannot see
-        any_user = User(username='test_author')
+        any_user = User(username='any_user')
         any_user.save()
+        client = Client()
+        client.force_login(any_user)
+        any_user_response = client.get(follow_index_url, follow=False)
+        self.assertNotContains(any_user_response, post.text)
 
+    def test_only_logged_can_comment(self):
+        post = Post(text='Log in to comment me', author=self._user)
+        post.save()
+        post_url = reverse('post', kwargs={'username': self._user,
+                                           'post_id': post.pk})
 
-        #
-        # def publish_post_with_new(self):
-        #     url = reverse('post_new')
-        #     response = self._logged_client.post(url,
-        #                                         data=self.post_publish_data(),
-        #                                         follow=True)
-        #     self._post = self.check_post_in_posts()
-        #     self.post_text_is_found_on_post_pages()
-        #     return response
-        #
-        # self.c
+        logged_response = self._logged_client.get(post_url)
+        self.assertContains(logged_response, '<form>')
+
+        unlogged_response = self._unlogged_client.get(post_url)
+        self.assertNotContains(unlogged_response, '<form>')

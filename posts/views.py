@@ -1,16 +1,16 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.urls import reverse, reverse_lazy
-from django.http import HttpResponseNotFound, HttpResponse, Http404
+from django.urls import reverse
+from django.http import HttpResponseNotFound
 from django.core.paginator import Paginator
-from django.shortcuts import render, redirect, get_object_or_404, \
-    get_list_or_404
-from django.views.decorators.cache import cache_page
+from django.shortcuts import render, redirect, get_object_or_404
 
 from yatube.settings import TEMPLATE_CACHE_TIMEOUTS
 from .models import Post, Follow
 from .forms import PostForm, CommentForm
+
 User = get_user_model()
+
 
 def index(request):
     posts = Post.objects.select_related('author', 'group').all()
@@ -108,7 +108,8 @@ def post_edit(request, username, post_id):
         if form.is_valid():
             form.save(commit=True)
             return redirect(
-                reverse('post', kwargs=dict(username=username, post_id=post_id)))
+                reverse('post',
+                        kwargs=dict(username=username, post_id=post_id)))
     return render(
         request, 'post_edit.html', context={
             'form': form,
@@ -147,8 +148,7 @@ def add_comment(request, username: str, post_id: int):
 
 @login_required
 def follow_index(request):
-    following = get_list_or_404(Follow.objects.values('author'),
-                                user=request.user)
+    following = Follow.objects.filter(user=request.user).values('author')
     following_pks = map(lambda x: x['author'], following)
     following_posts = Post.objects.select_related('author', 'group').filter(
         author__pk__in=following_pks).all()
@@ -168,15 +168,17 @@ def follow_index(request):
 
 @login_required
 def profile_follow(request, username):
-    try:
-        following = Follow.objects.filter(user=request.user).values('author')
-        following_pks = map(lambda x: x['author'], following)
-    except Follow.DoesNotExist:
-        following_pks = []
-    author = get_object_or_404(User, username=username)
-    if author.pk not in following_pks:
-        follow = Follow(user=request.user, author=author)
-        follow.save()
+    if username != request.user.username:
+        try:
+            following = Follow.objects.filter(user=request.user).values(
+                'author')
+            following_pks = map(lambda x: x['author'], following)
+        except Follow.DoesNotExist:
+            following_pks = []
+        author = get_object_or_404(User, username=username)
+        if author.pk not in following_pks:
+            follow = Follow(user=request.user, author=author)
+            follow.save()
     redirect_to = reverse('follow_index')
     return redirect(redirect_to)
 
