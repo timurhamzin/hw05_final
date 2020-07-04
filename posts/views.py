@@ -28,7 +28,7 @@ def index(request):
 
 def group_posts(request, slug):
     posts = Post.objects.select_related('author', 'group').filter(
-        group__slug=slug).all()
+        group__slug=slug)
     paginator = Paginator(posts, 10)
     page_number = request.GET.get('page', 1)
     page = paginator.get_page(page_number)
@@ -64,11 +64,8 @@ def post_view(request, username: str, post_id: int):
     comment_form = CommentForm()
 
     author = post.author
-    group = post.group
     comments = post.comments.all()
-
     post_count = author.posts.count()
-    # post_count = 1
 
     return render(request, 'post.html',
                   {
@@ -148,10 +145,8 @@ def add_comment(request, username: str, post_id: int):
 
 @login_required
 def follow_index(request):
-    following = Follow.objects.filter(user=request.user).values('author')
-    following_pks = map(lambda x: x['author'], following)
-    following_posts = Post.objects.select_related('author', 'group').filter(
-        author__pk__in=following_pks).all()
+    following_posts = Post.objects.select_related('author').filter(
+        author__following__user=request.user)
     paginator = Paginator(following_posts, 10)
     page_number = request.GET.get('page', 1)
     page = paginator.get_page(page_number)
@@ -161,7 +156,6 @@ def follow_index(request):
             'page': page,
             'paginator': paginator,
             'cache_timeout': TEMPLATE_CACHE_TIMEOUTS['index'],
-            'follow': following
         }
     )
 
@@ -169,16 +163,8 @@ def follow_index(request):
 @login_required
 def profile_follow(request, username):
     if username != request.user.username:
-        try:
-            following = Follow.objects.filter(user=request.user).values(
-                'author')
-            following_pks = map(lambda x: x['author'], following)
-        except Follow.DoesNotExist:
-            following_pks = []
         author = get_object_or_404(User, username=username)
-        if author.pk not in following_pks:
-            follow = Follow(user=request.user, author=author)
-            follow.save()
+        Follow.objects.get_or_create(user=request.user, author=author)
     redirect_to = reverse('follow_index')
     return redirect(redirect_to)
 
@@ -186,8 +172,5 @@ def profile_follow(request, username):
 @login_required
 def profile_unfollow(request, username):
     author = get_object_or_404(User, username=username)
-    following = Follow.objects.get(author=author.pk, user=request.user.pk)
-    if following:
-        following.delete()
-    redirect_to = reverse('index')
-    return redirect(redirect_to)
+    Follow.objects.filter(author=author.pk, user=request.user.pk).delete()
+    return redirect(reverse('index'))

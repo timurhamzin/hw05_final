@@ -149,15 +149,6 @@ class TestPosts(TestCase):
         response = self._logged_client.get('inexisting_url', follow=False)
         self.assertEqual(404, response.status_code)
 
-    def test_create_post_with_image_from_file_manually(self):
-        image_path = os.path.join(BASE_DIR, 'posts/static/mug.jpg')
-        with open(image_path, 'rb') as img:
-            data = {'text': self._post.text, 'group': self._post.group,
-                    'image': ImageFile(img, 'image.jpg')}
-            Post.objects.create(author=self._user, **data)
-        self._post = self.check_post_in_posts()
-        self.post_text_is_found_on_post_pages(find_img_tag=True)
-
     def generate_image(self):
         io_image = BytesIO()
         generated_image = Image.new("RGBA", size=(100, 100))
